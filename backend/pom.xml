@@ -3,11 +3,13 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
-		<groupId>com.example</groupId>
-		<artifactId>phy6-master-parent</artifactId>
-		<version>0.0.1-SNAPSHOT</version>
-		<relativePath>../pom.xml</relativePath>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>3.2.3</version>
+		<relativePath/>
 	</parent>
+	<groupId>com.example</groupId>
+	<version>0.0.1-SNAPSHOT</version>
 	<artifactId>phy6-master-backend</artifactId>
 	<name>Phy6-Master Backend</name>
 	<description>This project is about developing a Learning Management System (LMS) for an A/L Physics teacher</description>
