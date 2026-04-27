@@ -17,6 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -40,65 +43,15 @@ public class ReceiptService {
         }
 
         if (payment.getReceiptNumber() != null) {
-            // Already generated, return existing
+            ensureReceiptFileAvailable(payment);
             return mapToDto(payment);
         }
 
-        // Generate receipt details
         String receiptNumber = "RCPT-" + LocalDateTime.now().getYear() + "-" + String.format("%06d", payment.getId());
         LocalDateTime generatedAt = LocalDateTime.now();
-
-        // Create PDF
-        String fileName = receiptNumber + ".pdf";
-
-        try {
-            Document document = new Document();
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            PdfWriter.getInstance(document, outputStream);
-            document.open();
-
-            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 20);
-            Font normalFont = FontFactory.getFont(FontFactory.HELVETICA, 12);
-
-            document.add(new Paragraph("Phy6 Master - Official Receipt", titleFont));
-            document.add(new Paragraph("\n"));
-            document.add(new Paragraph("Receipt Number: " + receiptNumber, normalFont));
-            document.add(new Paragraph("Issue Date: " + generatedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), normalFont));
-            document.add(new Paragraph("--------------------------------------------------", normalFont));
-            
-            String studentName = payment.getEnrollment() != null && payment.getEnrollment().getStudent() != null 
-                    ? payment.getEnrollment().getStudent().getName() : "Unknown";
-            String courseTitle = payment.getEnrollment() != null && payment.getEnrollment().getCourse() != null 
-                    ? payment.getEnrollment().getCourse().getTitle() : "Unknown";
-            
-            document.add(new Paragraph("Student Name: " + studentName, normalFont));
-            document.add(new Paragraph("Course / Class: " + courseTitle, normalFont));
-            document.add(new Paragraph("Amount Paid: Rs. " + payment.getAmount(), normalFont));
-            document.add(new Paragraph("Payment Method: " + payment.getPaymentMethod(), normalFont));
-            document.add(new Paragraph("Approval Date: " + (payment.getVerifiedAt() != null ? payment.getVerifiedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "N/A"), normalFont));
-            
-            if (payment.getReferenceNumber() != null) {
-                document.add(new Paragraph("Payment Reference: " + payment.getReferenceNumber(), normalFont));
-            }
-            
-            document.add(new Paragraph("\n"));
-            document.add(new Paragraph("Thank you for choosing Phy6 Master!", normalFont));
-            document.close();
-
-            String storedLocation = fileStorageService.storeBytes(
-                    outputStream.toByteArray(),
-                    "application/pdf",
-                    "receipts",
-                    fileName
-            );
-            payment.setReceiptFilePath(storedLocation);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to generate PDF receipt", e);
-        }
-
         payment.setReceiptNumber(receiptNumber);
         payment.setReceiptGeneratedAt(generatedAt);
+        ensureReceiptFileAvailable(payment);
         paymentRepository.save(payment);
 
         // Activate the enrollment so the student gets class access
@@ -133,9 +86,10 @@ public class ReceiptService {
     public String getReceiptLocation(Long paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
-        if (payment.getReceiptFilePath() == null) {
-            throw new IllegalStateException("Receipt file not found");
+        if (payment.getReceiptNumber() == null || payment.getReceiptNumber().isBlank()) {
+            throw new IllegalStateException("Receipt has not been generated for this payment");
         }
+        ensureReceiptFileAvailable(payment);
         return payment.getReceiptFilePath();
     }
 
@@ -156,6 +110,83 @@ public class ReceiptService {
         if (payment.getReceiptFilePath() == null || payment.getReceiptFilePath().isBlank()) {
             throw new IllegalStateException("No receipt has been issued for this payment yet.");
         }
+    }
+
+    private void ensureReceiptFileAvailable(Payment payment) {
+        String existingPath = payment.getReceiptFilePath();
+        if (existingPath != null && !existingPath.isBlank() && !isMissingLocalFile(existingPath)) {
+            return;
+        }
+
+        LocalDateTime issueDate = payment.getReceiptGeneratedAt() != null ? payment.getReceiptGeneratedAt() : LocalDateTime.now();
+        String receiptNumber = payment.getReceiptNumber();
+        if (receiptNumber == null || receiptNumber.isBlank()) {
+            receiptNumber = "RCPT-" + issueDate.getYear() + "-" + String.format("%06d", payment.getId());
+            payment.setReceiptNumber(receiptNumber);
+        }
+
+        try {
+            String storedLocation = buildAndStoreReceiptPdf(payment, receiptNumber, issueDate);
+            payment.setReceiptGeneratedAt(issueDate);
+            payment.setReceiptFilePath(storedLocation);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate PDF receipt", e);
+        }
+    }
+
+    private boolean isMissingLocalFile(String storedLocation) {
+        if (storedLocation == null || storedLocation.isBlank()) {
+            return true;
+        }
+        if (storedLocation.startsWith("http://") || storedLocation.startsWith("https://")) {
+            return false;
+        }
+        String normalized = storedLocation.replace("\\", "/");
+        Path path = Paths.get(normalized).toAbsolutePath().normalize();
+        return !Files.exists(path) || !Files.isReadable(path);
+    }
+
+    private String buildAndStoreReceiptPdf(Payment payment, String receiptNumber, LocalDateTime issueDate) throws Exception {
+        Document document = new Document();
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        PdfWriter.getInstance(document, outputStream);
+        document.open();
+
+        Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 20);
+        Font normalFont = FontFactory.getFont(FontFactory.HELVETICA, 12);
+
+        document.add(new Paragraph("Phy6 Master - Official Receipt", titleFont));
+        document.add(new Paragraph("\n"));
+        document.add(new Paragraph("Receipt Number: " + receiptNumber, normalFont));
+        document.add(new Paragraph("Issue Date: " + issueDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), normalFont));
+        document.add(new Paragraph("--------------------------------------------------", normalFont));
+
+        String studentName = payment.getEnrollment() != null && payment.getEnrollment().getStudent() != null
+                ? payment.getEnrollment().getStudent().getName() : "Unknown";
+        String courseTitle = payment.getEnrollment() != null && payment.getEnrollment().getCourse() != null
+                ? payment.getEnrollment().getCourse().getTitle() : "Unknown";
+
+        document.add(new Paragraph("Student Name: " + studentName, normalFont));
+        document.add(new Paragraph("Course / Class: " + courseTitle, normalFont));
+        document.add(new Paragraph("Amount Paid: Rs. " + payment.getAmount(), normalFont));
+        document.add(new Paragraph("Payment Method: " + payment.getPaymentMethod(), normalFont));
+        document.add(new Paragraph("Approval Date: " + (payment.getVerifiedAt() != null ? payment.getVerifiedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "N/A"), normalFont));
+
+        if (payment.getReferenceNumber() != null) {
+            document.add(new Paragraph("Payment Reference: " + payment.getReferenceNumber(), normalFont));
+        }
+
+        document.add(new Paragraph("\n"));
+        document.add(new Paragraph("Thank you for choosing Phy6 Master!", normalFont));
+        document.close();
+
+        String fileName = receiptNumber + ".pdf";
+        return fileStorageService.storeBytes(
+                outputStream.toByteArray(),
+                "application/pdf",
+                "receipts",
+                fileName
+        );
     }
 
     private ReceiptResponseDTO mapToDto(Payment payment) {
