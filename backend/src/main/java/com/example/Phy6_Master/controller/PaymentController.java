@@ -132,7 +132,8 @@ public class PaymentController {
                         .header(HttpHeaders.LOCATION, receiptLocation)
                         .build();
             }
-            Path filePath = java.nio.file.Paths.get(receiptLocation).toAbsolutePath().normalize();
+            String normalizedLocation = receiptLocation.replace("\\", "/");
+            Path filePath = java.nio.file.Paths.get(normalizedLocation).toAbsolutePath().normalize();
             Resource resource = new UrlResource(filePath.toUri());
             if (!resource.exists() || !resource.isReadable()) {
                 return ResponseEntity.notFound().build();

@@ -58,10 +58,11 @@ public class AccountantReceiptController {
                         .build();
             }
 
-            Path filePath = java.nio.file.Paths.get(receiptLocation).toAbsolutePath().normalize();
+            String normalizedLocation = receiptLocation.replace("\\", "/");
+            Path filePath = java.nio.file.Paths.get(normalizedLocation).toAbsolutePath().normalize();
             Resource resource = new UrlResource(filePath.toUri());
 
-            if (resource.exists() || resource.isReadable()) {
+            if (resource.exists() && resource.isReadable()) {
                 return ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_PDF)
                         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + resource.getFilename() + "\"")
