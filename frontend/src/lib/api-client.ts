@@ -1,5 +1,12 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
+export function apiUrl(path: string): string {
+  if (!BASE_URL) return path;
+  const normalizedBase = BASE_URL.endsWith("/") ? BASE_URL.slice(0, -1) : BASE_URL;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${normalizedBase}${normalizedPath}`;
+}
+
 class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -31,12 +38,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, { cache: "no-store" });
+  const res = await fetch(apiUrl(path), { cache: "no-store" });
   return handleResponse<T>(res);
 }
 
 export async function post<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(apiUrl(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
@@ -46,7 +53,7 @@ export async function post<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function put<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(apiUrl(path), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
@@ -56,7 +63,7 @@ export async function put<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function patch<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(apiUrl(path), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
@@ -66,12 +73,12 @@ export async function patch<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function del<T = void>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, { method: "DELETE", cache: "no-store" });
+  const res = await fetch(apiUrl(path), { method: "DELETE", cache: "no-store" });
   return handleResponse<T>(res);
 }
 
 export async function uploadFile<T>(path: string, formData: FormData, method: string = "POST"): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(apiUrl(path), {
     method,
     body: formData,
     cache: "no-store",
@@ -80,7 +87,7 @@ export async function uploadFile<T>(path: string, formData: FormData, method: st
 }
 
 export function downloadUrl(path: string): string {
-  return `${BASE_URL}${path}`;
+  return apiUrl(path);
 }
 
 export { ApiError };

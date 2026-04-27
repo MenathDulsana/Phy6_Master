@@ -1,3 +1,5 @@
+import { apiUrl } from "./api-client";
+
 export type UserRole = "STUDENT" | "TEACHER" | "ADMIN" | "ACCOUNTANT" | "TUTOR" | "TUTE_MANAGER";
 
 export type AuthResponse = {
@@ -18,10 +20,8 @@ export type ResetPasswordResponse = {
   message: string;
 };
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
-
 async function request<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(apiUrl(path), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

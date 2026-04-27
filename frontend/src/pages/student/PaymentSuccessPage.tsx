@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { apiUrl } from '../../lib/api-client';
 
 type EnrollmentStatus = 'PENDING' | 'PAYMENT_SUBMITTED' | 'APPROVED' | 'ACTIVE' | 'REJECTED' | null;
 
@@ -27,7 +28,7 @@ const PaymentSuccessPage: React.FC = () => {
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/student/enrollments/status/${userId}`);
+        const res = await fetch(apiUrl(`/api/student/enrollments/status/${userId}`));
         if (!res.ok) return;
         const enrollments: Array<{ status: string }> = await res.json();
         // Stripe webhook sets enrollment to PAYMENT_SUBMITTED after pay; ACTIVE comes after receipt.

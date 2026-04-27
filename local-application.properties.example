@@ -1,0 +1,19 @@
+# Local overrides (do not commit local-application.properties)
+spring.datasource.url=jdbc:mysql://localhost:3306/phy6_master?createDatabaseIfNotExist=true
+spring.datasource.username=root
+spring.datasource.password=
+
+# Local CORS
+app.cors.allowed-origins=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
+
+# Stripe (set your real keys for local testing)
+stripe.api.key=
+stripe.publishable.key=
+stripe.webhook.secret=
+stripe.success.url=http://localhost:5173/student/payment-success
+stripe.cancel.url=http://localhost:5173/student/payment-cancel
+
+# OpenAI/Groq-compatible API (optional)
+openai.api.base-url=https://api.groq.com/openai/v1
+openai.api.key=
+openai.model=llama-3.1-8b-instant

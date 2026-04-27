@@ -3,7 +3,9 @@
  * Handles Stripe Checkout Session creation and session retrieval
  */
 
-const API_BASE = '/api/student/stripe';
+import { apiUrl } from '../api-client';
+
+const API_BASE = apiUrl('/api/student/stripe');
 
 const MIN_STRIPE_LKR = 0.01;
 
