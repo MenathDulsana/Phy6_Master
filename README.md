@@ -24,6 +24,23 @@ A comprehensive Learning Management System for A/L Physics education, streamlini
 
 Railway provides `PORT` automatically; the backend now reads it.
 
+### File storage (Supabase Storage – free tier)
+1. Create a Supabase project → **Storage** → create a bucket (e.g. `phy6-files`) and make it **Public**.
+2. In Supabase, open **Project Settings → API** and copy:
+   - **Project URL**
+   - **Service Role Key**
+3. Add these Railway environment variables:
+
+| Variable | Example |
+| --- | --- |
+| `STORAGE_PROVIDER` | `supabase` |
+| `SUPABASE_URL` | `https://xxxx.supabase.co` |
+| `SUPABASE_SERVICE_KEY` | `service-role-key` |
+| `SUPABASE_STORAGE_BUCKET` | `phy6-files` |
+| `SUPABASE_STORAGE_PUBLIC_URL` | `https://xxxx.supabase.co/storage/v1/object/public/phy6-files` |
+
+Uploads for materials, receipts, and payment proofs will now go to Supabase and store public URLs.
+
 ### Frontend (Vercel – free tier)
 1. Import the repo in Vercel and set **Root Directory** to `frontend`.
 2. Build command: `npm run build` (output: `dist`).

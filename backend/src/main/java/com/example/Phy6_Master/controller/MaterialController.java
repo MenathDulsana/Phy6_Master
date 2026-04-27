@@ -3,11 +3,15 @@ package com.example.Phy6_Master.controller;
 import com.example.Phy6_Master.model.LearningMaterial;
 import com.example.Phy6_Master.model.Lesson;
 import com.example.Phy6_Master.repository.LearningMaterialRepository;
+import com.example.Phy6_Master.service.FileStorageService;
 import com.example.Phy6_Master.service.LessonService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,23 +19,25 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api")
 public class MaterialController {
 
-    private static final String UPLOAD_DIR = "uploads";
+    @Value("${storage.local.upload-dir:uploads}")
+    private String uploadDir;
 
     @Autowired
     private LearningMaterialRepository materialRepository;
 
     @Autowired
     private LessonService lessonService;
+
+    @Autowired
+    private FileStorageService fileStorageService;
 
     /**
      * Upload a file and create a LearningMaterial linked to a lesson.
@@ -63,26 +69,12 @@ public class MaterialController {
             // Determine storage sub-folder based on type
             String subFolder;
             switch (type.toUpperCase()) {
-                case "VIDEO": subFolder = "video"; break;
-                case "NOTE":  subFolder = "note";  break;
-                default:      subFolder = "pdf";   break;
+                case "VIDEO": subFolder = "materials/video"; break;
+                case "NOTE":  subFolder = "materials/note";  break;
+                default:      subFolder = "materials/pdf";   break;
             }
-
-            // Generate unique file name to avoid collisions
-            String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-            }
-            String storedFilename = UUID.randomUUID().toString() + extension;
-
-            // Save to disk
-            Path uploadPath = Paths.get(UPLOAD_DIR, subFolder);
-            Files.createDirectories(uploadPath);
-            Path filePath = uploadPath.resolve(storedFilename);
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-
-            material.setUrl(filePath.toString());  // e.g. uploads/pdf/abc.pdf
+            String storedLocation = fileStorageService.storeFile(file, subFolder);
+            material.setUrl(storedLocation);
         }
 
         LearningMaterial saved = materialRepository.save(material);
@@ -97,10 +89,21 @@ public class MaterialController {
         LearningMaterial material = materialRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Material not found with id: " + id));
 
+        String storedUrl = material.getUrl();
+        if (storedUrl == null || storedUrl.isBlank()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        if (fileStorageService.isRemoteUrl(storedUrl)) {
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .header(HttpHeaders.LOCATION, storedUrl)
+                    .build();
+        }
+
         // Normalise path — older records may lack the "uploads/" prefix
-        String storedUrl = material.getUrl().replace("\\", "/");
-        if (!storedUrl.startsWith(UPLOAD_DIR + "/") && !storedUrl.startsWith(UPLOAD_DIR + "\\")) {
-            storedUrl = UPLOAD_DIR + "/" + storedUrl;
+        storedUrl = storedUrl.replace("\\", "/");
+        if (!storedUrl.startsWith(uploadDir + "/") && !storedUrl.startsWith(uploadDir + "\\")) {
+            storedUrl = uploadDir + "/" + storedUrl;
         }
 
         Path filePath = Paths.get(storedUrl).toAbsolutePath().normalize();
@@ -152,7 +155,7 @@ public class MaterialController {
         if ("LINK".equalsIgnoreCase(type)) {
             // For LINK type, store the URL directly
             if (url != null) {
-                // Delete old file from disk if it was a file-based material
+                // Delete old file from storage if it was a file-based material
                 tryDeleteOldFile(material.getUrl());
                 material.setUrl(url);
             }
@@ -163,24 +166,12 @@ public class MaterialController {
             // Determine sub-folder based on new type
             String subFolder;
             switch (type.toUpperCase()) {
-                case "VIDEO": subFolder = "video"; break;
-                case "NOTE":  subFolder = "note";  break;
-                default:      subFolder = "pdf";   break;
+                case "VIDEO": subFolder = "materials/video"; break;
+                case "NOTE":  subFolder = "materials/note";  break;
+                default:      subFolder = "materials/pdf";   break;
             }
-
-            String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-            }
-            String storedFilename = UUID.randomUUID().toString() + extension;
-
-            Path uploadPath = Paths.get(UPLOAD_DIR, subFolder);
-            Files.createDirectories(uploadPath);
-            Path filePath = uploadPath.resolve(storedFilename);
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-
-            material.setUrl(filePath.toString());
+            String storedLocation = fileStorageService.storeFile(file, subFolder);
+            material.setUrl(storedLocation);
         }
 
         LearningMaterial saved = materialRepository.save(material);
@@ -195,31 +186,26 @@ public class MaterialController {
         LearningMaterial material = materialRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Material not found with id: " + id));
 
-        // Delete file from disk — normalise path like download
-        try {
-            String storedPath = material.getUrl().replace("\\", "/");
-            if (!storedPath.startsWith(UPLOAD_DIR + "/") && !storedPath.startsWith(UPLOAD_DIR + "\\")) {
-                storedPath = UPLOAD_DIR + "/" + storedPath;
-            }
-            Path filePath = Paths.get(storedPath);
-            Files.deleteIfExists(filePath);
-        } catch (IOException ignored) {
-            // File may already be gone — proceed to delete entity
-        }
+        tryDeleteOldFile(material.getUrl());
 
         materialRepository.delete(material);
         return ResponseEntity.noContent().build();
     }
 
     private void tryDeleteOldFile(String storedUrl) {
-        if (storedUrl == null || storedUrl.startsWith("http://") || storedUrl.startsWith("https://")) return;
-        try {
-            String oldPath = storedUrl.replace("\\", "/");
-            if (!oldPath.startsWith(UPLOAD_DIR + "/")) {
-                oldPath = UPLOAD_DIR + "/" + oldPath;
+        if (storedUrl == null || storedUrl.isBlank()) {
+            return;
+        }
+        if (fileStorageService.isRemoteUrl(storedUrl)) {
+            if (!fileStorageService.isSupabaseEnabled() || !fileStorageService.isSupabaseUrl(storedUrl)) {
+                return;
             }
-            Files.deleteIfExists(Paths.get(oldPath));
-        } catch (IOException ignored) { }
+        }
+        try {
+            fileStorageService.deleteFile(storedUrl);
+        } catch (IOException e) {
+            log.warn("Failed to delete material file: {}", e.getMessage());
+        }
     }
 
     private String getExtension(String path) {

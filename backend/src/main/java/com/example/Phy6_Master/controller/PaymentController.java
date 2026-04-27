@@ -126,7 +126,13 @@ public class PaymentController {
             @RequestParam Long userId) {
         try {
             receiptService.verifyStudentReceiptAccess(paymentId, userId);
-            Path filePath = receiptService.getReceiptFilePath(paymentId);
+            String receiptLocation = receiptService.getReceiptLocation(paymentId);
+            if (receiptLocation.startsWith("http://") || receiptLocation.startsWith("https://")) {
+                return ResponseEntity.status(HttpStatus.FOUND)
+                        .header(HttpHeaders.LOCATION, receiptLocation)
+                        .build();
+            }
+            Path filePath = java.nio.file.Paths.get(receiptLocation).toAbsolutePath().normalize();
             Resource resource = new UrlResource(filePath.toUri());
             if (!resource.exists() || !resource.isReadable()) {
                 return ResponseEntity.notFound().build();

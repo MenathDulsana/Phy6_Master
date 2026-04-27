@@ -9,13 +9,21 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+function isRemoteUrl(filePath: string): boolean {
+    return /^https?:\/\//i.test(filePath);
+}
+
 function proofFileUrl(filePath: string): string {
+    if (isRemoteUrl(filePath)) {
+        return filePath;
+    }
     const filename = filePath.replace(/\\/g, "/").split("/").pop() ?? filePath;
     return `/api/files/${encodeURIComponent(filename)}`;
 }
 
 function isPdf(filePath: string): boolean {
-    return filePath.toLowerCase().endsWith(".pdf");
+    const cleanPath = filePath.split("?")[0];
+    return cleanPath.toLowerCase().endsWith(".pdf");
 }
 
 function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {

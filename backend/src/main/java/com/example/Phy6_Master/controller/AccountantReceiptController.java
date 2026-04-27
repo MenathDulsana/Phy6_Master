@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -50,7 +51,14 @@ public class AccountantReceiptController {
     @GetMapping("/receipts/{paymentId}/download")
     public ResponseEntity<Resource> downloadReceipt(@PathVariable Long paymentId) {
         try {
-            Path filePath = receiptService.getReceiptFilePath(paymentId);
+            String receiptLocation = receiptService.getReceiptLocation(paymentId);
+            if (receiptLocation.startsWith("http://") || receiptLocation.startsWith("https://")) {
+                return ResponseEntity.status(HttpStatus.FOUND)
+                        .header(HttpHeaders.LOCATION, receiptLocation)
+                        .build();
+            }
+
+            Path filePath = java.nio.file.Paths.get(receiptLocation).toAbsolutePath().normalize();
             Resource resource = new UrlResource(filePath.toUri());
 
             if (resource.exists() || resource.isReadable()) {
