@@ -8,6 +8,7 @@ import {
     User, Mail, BookOpen, Clock, Hash, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
+import { apiUrl } from "@/lib/api-client";
 
 function isRemoteUrl(filePath: string): boolean {
     return /^https?:\/\//i.test(filePath);
@@ -18,7 +19,11 @@ function proofFileUrl(filePath: string): string {
         return filePath;
     }
     const filename = filePath.replace(/\\/g, "/").split("/").pop() ?? filePath;
-    return `/api/files/${encodeURIComponent(filename)}`;
+    return apiUrl(`/api/files/${encodeURIComponent(filename)}`);
+}
+
+function accountantReceiptUrl(paymentId: number): string {
+    return apiUrl(`/api/accountant/receipts/${paymentId}/download`);
 }
 
 function isPdf(filePath: string): boolean {
@@ -374,7 +379,7 @@ export default function PaymentVerificationDetail() {
                                             </div>
                                         </div>
                                         <a
-                                            href={`/api/accountant/receipts/${detail.id}/download`}
+                                            href={accountantReceiptUrl(detail.id)}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors"
