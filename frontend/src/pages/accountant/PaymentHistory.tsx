@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { get } from "@/lib/api-client";
+import { apiUrl, get } from "@/lib/api-client";
 import { useGenerateReceipt } from "@/lib/api/accountant-payments";
 import { toast } from "sonner";
 
@@ -37,6 +37,10 @@ const fadeUp = (delay = 0) => ({
     animate: { opacity: 1, y: 0 },
     transition: { delay, duration: 0.35 },
 });
+
+function accountantReceiptUrl(paymentId: number): string {
+    return apiUrl(`/api/accountant/receipts/${paymentId}/download`);
+}
 
 function StatusBadge({ status }: { status: string }) {
     if (status === "APPROVED")
@@ -292,7 +296,7 @@ export default function PaymentHistory() {
                                                 <div className="flex items-center justify-end gap-2 flex-wrap">
                                                     {payment.receiptNumber ? (
                                                         <a
-                                                            href={`/api/accountant/receipts/${payment.id}/download`}
+                                                            href={accountantReceiptUrl(payment.id)}
                                                             target="_blank"
                                                             rel="noreferrer"
                                                             onClick={(e) => e.stopPropagation()}
@@ -351,7 +355,7 @@ export default function PaymentHistory() {
                                     <div className="flex items-center gap-2 pt-1">
                                         {payment.receiptNumber ? (
                                             <a
-                                                href={`/api/accountant/receipts/${payment.id}/download`}
+                                                href={accountantReceiptUrl(payment.id)}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { get, put, post } from "@/lib/api-client";
+import { apiUrl, get, put, post } from "@/lib/api-client";
 import type { Student, Course, User, QuizAttempt, QuizResultSummary, StudentDashboardResponse } from "./types";
 
 export type EnrollmentSummary = {
@@ -163,7 +163,7 @@ export type PaymentHistoryResponseDTO = {
 
 /** Student receipt PDF (approved payment + receipt issued; {@code userId} = auth user id). */
 export function studentReceiptDownloadUrl(paymentId: number, userId: number): string {
-    return `/api/student/payments/${paymentId}/receipt/download?userId=${userId}`;
+    return apiUrl(`/api/student/payments/${paymentId}/receipt/download?userId=${userId}`);
 }
 
 export async function downloadStudentReceiptPdf(paymentId: number, userId: number): Promise<void> {
