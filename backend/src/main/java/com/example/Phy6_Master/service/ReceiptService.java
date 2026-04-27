@@ -30,7 +30,7 @@ public class ReceiptService {
     private final NotificationService notificationService;
     private final FileStorageService fileStorageService;
 
-    @Transactional
+    @Transactional(noRollbackFor = Exception.class)
     public ReceiptResponseDTO generateReceipt(Long paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
