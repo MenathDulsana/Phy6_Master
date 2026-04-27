@@ -6,6 +6,7 @@ import BankSlipUploadForm from '../../components/payment/BankSlipUploadForm';
 import StripePaymentForm from '../../components/payment/StripePaymentForm';
 import { useToast } from '../../components/ui/use-toast';
 import { useCourse } from '../../lib/api';
+import { apiUrl } from '../../lib/api-client';
 import { ArrowLeft } from 'lucide-react';
 
 async function parseJsonResponse(response: Response): Promise<{ success?: boolean; message?: string }> {
@@ -38,7 +39,7 @@ const PaymentPage: React.FC = () => {
         }
         setIsLoading(true);
         try {
-            const response = await fetch('/api/student/payments/atm-transfer', {
+            const response = await fetch(apiUrl('/api/student/payments/atm-transfer'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ classId: Number(classId), studentId, amount, referenceNumber }),
@@ -71,7 +72,7 @@ const PaymentPage: React.FC = () => {
             formData.append('amount', String(amount));
             formData.append('file', file);
 
-            const response = await fetch('/api/student/payments/bank-slip', {
+            const response = await fetch(apiUrl('/api/student/payments/bank-slip'), {
                 method: 'POST',
                 body: formData,
             });
