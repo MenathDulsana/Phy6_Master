@@ -107,7 +107,7 @@ public class ReceiptService {
         if (!"APPROVED".equals(payment.getStatus())) {
             throw new IllegalStateException("Receipts are only available for approved payments.");
         }
-        if (payment.getReceiptFilePath() == null || payment.getReceiptFilePath().isBlank()) {
+        if (payment.getReceiptNumber() == null || payment.getReceiptNumber().isBlank()) {
             throw new IllegalStateException("No receipt has been issued for this payment yet.");
         }
     }
