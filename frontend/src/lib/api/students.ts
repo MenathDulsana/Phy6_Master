@@ -177,6 +177,9 @@ export async function downloadStudentReceiptPdf(paymentId: number, userId: numbe
         }
         throw new Error(`Could not download receipt (${res.status})`);
     }
+    if (contentType.includes("text/html")) {
+        throw new Error("Receipt endpoint returned HTML instead of PDF. Check frontend API routing/deployment settings.");
+    }
     const blob = await res.blob();
     const dispo = res.headers.get("content-disposition");
     let filename = "phy6-receipt.pdf";
