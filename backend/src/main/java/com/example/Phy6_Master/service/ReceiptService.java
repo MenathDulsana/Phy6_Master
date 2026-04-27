@@ -16,8 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.File;
-import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -29,8 +28,7 @@ public class ReceiptService {
     private final PaymentRepository paymentRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final NotificationService notificationService;
-
-    private final String RECEIPT_DIR = "uploads/receipts/";
+    private final FileStorageService fileStorageService;
 
     @Transactional
     public ReceiptResponseDTO generateReceipt(Long paymentId) {
@@ -52,16 +50,11 @@ public class ReceiptService {
 
         // Create PDF
         String fileName = receiptNumber + ".pdf";
-        String filePath = RECEIPT_DIR + fileName;
 
         try {
-            File dir = new File(RECEIPT_DIR);
-            if (!dir.exists()) {
-                dir.mkdirs();
-            }
-
             Document document = new Document();
-            PdfWriter.getInstance(document, new FileOutputStream(filePath));
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            PdfWriter.getInstance(document, outputStream);
             document.open();
 
             Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 20);
@@ -91,14 +84,21 @@ public class ReceiptService {
             document.add(new Paragraph("\n"));
             document.add(new Paragraph("Thank you for choosing Phy6 Master!", normalFont));
             document.close();
-            
+
+            String storedLocation = fileStorageService.storeBytes(
+                    outputStream.toByteArray(),
+                    "application/pdf",
+                    "receipts",
+                    fileName
+            );
+            payment.setReceiptFilePath(storedLocation);
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate PDF receipt", e);
         }
 
         payment.setReceiptNumber(receiptNumber);
         payment.setReceiptGeneratedAt(generatedAt);
-        payment.setReceiptFilePath(filePath);
         paymentRepository.save(payment);
 
         // Activate the enrollment so the student gets class access
@@ -130,13 +130,13 @@ public class ReceiptService {
         return mapToDto(payment);
     }
     
-    public java.nio.file.Path getReceiptFilePath(Long paymentId) {
+    public String getReceiptLocation(Long paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
         if (payment.getReceiptFilePath() == null) {
             throw new IllegalStateException("Receipt file not found");
         }
-        return java.nio.file.Paths.get(payment.getReceiptFilePath());
+        return payment.getReceiptFilePath();
     }
 
     /**

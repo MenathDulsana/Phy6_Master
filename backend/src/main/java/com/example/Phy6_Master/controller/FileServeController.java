@@ -6,6 +6,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.net.MalformedURLException;
 import java.nio.file.Path;
@@ -22,14 +23,15 @@ import java.nio.file.Paths;
 @RequestMapping("/api/files")
 public class FileServeController {
 
-    private static final String UPLOAD_DIR = "uploads";
+    @Value("${storage.local.upload-dir:uploads}")
+    private String uploadDir;
 
     @GetMapping("/{filename:.+}")
     public ResponseEntity<Resource> serveFile(@PathVariable String filename) {
         try {
             // Resolve file path safely — strip any path traversal attempts
             String safeName = Paths.get(filename).getFileName().toString();
-            Path filePath = Paths.get(UPLOAD_DIR).resolve(safeName).normalize().toAbsolutePath();
+            Path filePath = Paths.get(uploadDir).resolve(safeName).normalize().toAbsolutePath();
             Resource resource = new UrlResource(filePath.toUri());
 
             if (!resource.exists() || !resource.isReadable()) {
