@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -43,42 +44,47 @@ public class MaterialController {
      * Upload a file and create a LearningMaterial linked to a lesson.
      */
     @PostMapping("/lessons/{lessonId}/materials/uploads")
-    public ResponseEntity<LearningMaterial> uploadMaterial(
+    public ResponseEntity<?> uploadMaterial(
             @PathVariable Long lessonId,
             @RequestParam("title") String title,
             @RequestParam("type") String type,
             @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "url", required = false) String url) throws IOException {
+        try {
+            Lesson lesson = lessonService.getLessonById(lessonId)
+                    .orElseThrow(() -> new IllegalArgumentException("Lesson not found with id: " + lessonId));
 
-        Lesson lesson = lessonService.getLessonById(lessonId)
-                .orElseThrow(() -> new RuntimeException("Lesson not found with id: " + lessonId));
+            LearningMaterial.MaterialType materialType = parseMaterialType(type);
 
-        LearningMaterial material = new LearningMaterial();
-        material.setTitle(title);
-        material.setType(LearningMaterial.MaterialType.valueOf(type.toUpperCase()));
-        material.setLesson(lesson);
+            LearningMaterial material = new LearningMaterial();
+            material.setTitle(title);
+            material.setType(materialType);
+            material.setLesson(lesson);
 
-        if ("LINK".equalsIgnoreCase(type)) {
-            // For LINK type, store the URL directly — no file needed
-            material.setUrl(url != null ? url : "");
-        } else {
-            if (file == null || file.isEmpty()) {
-                return ResponseEntity.badRequest().build();
+            if (materialType == LearningMaterial.MaterialType.LINK) {
+                if (url == null || url.isBlank()) {
+                    throw new IllegalArgumentException("URL is required for LINK material.");
+                }
+                material.setUrl(url);
+            } else {
+                if (file == null || file.isEmpty()) {
+                    throw new IllegalArgumentException("File is required for non-LINK material.");
+                }
+                String storedLocation = fileStorageService.storeFile(file, resolveSubFolder(materialType));
+                material.setUrl(storedLocation);
             }
 
-            // Determine storage sub-folder based on type
-            String subFolder;
-            switch (type.toUpperCase()) {
-                case "VIDEO": subFolder = "materials/video"; break;
-                case "NOTE":  subFolder = "materials/note";  break;
-                default:      subFolder = "materials/pdf";   break;
-            }
-            String storedLocation = fileStorageService.storeFile(file, subFolder);
-            material.setUrl(storedLocation);
+            LearningMaterial saved = materialRepository.save(material);
+            return ResponseEntity.ok(saved);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            log.error("Material upload failed due to storage configuration: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("message", e.getMessage()));
+        } catch (IOException e) {
+            log.error("Material upload I/O failed for lesson {}: {}", lessonId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", e.getMessage()));
         }
-
-        LearningMaterial saved = materialRepository.save(material);
-        return ResponseEntity.ok(saved);
     }
 
     /**
@@ -87,7 +93,7 @@ public class MaterialController {
     @GetMapping("/materials/{id}/downloads")
     public ResponseEntity<Resource> downloadMaterial(@PathVariable Long id) throws MalformedURLException {
         LearningMaterial material = materialRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Material not found with id: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Material not found with id: " + id));
 
         String storedUrl = material.getUrl();
         if (storedUrl == null || storedUrl.isBlank()) {
@@ -139,43 +145,43 @@ public class MaterialController {
      * Update material metadata (title, type) and optionally replace the file.
      */
     @PutMapping("/materials/{id}")
-    public ResponseEntity<LearningMaterial> updateMaterial(
+    public ResponseEntity<?> updateMaterial(
             @PathVariable Long id,
             @RequestParam("title") String title,
             @RequestParam("type") String type,
             @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "url", required = false) String url) throws IOException {
+        try {
+            LearningMaterial material = materialRepository.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Material not found with id: " + id));
 
-        LearningMaterial material = materialRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Material not found with id: " + id));
+            LearningMaterial.MaterialType materialType = parseMaterialType(type);
+            material.setTitle(title);
+            material.setType(materialType);
 
-        material.setTitle(title);
-        material.setType(LearningMaterial.MaterialType.valueOf(type.toUpperCase()));
-
-        if ("LINK".equalsIgnoreCase(type)) {
-            // For LINK type, store the URL directly
-            if (url != null) {
-                // Delete old file from storage if it was a file-based material
+            if (materialType == LearningMaterial.MaterialType.LINK) {
+                if (url == null || url.isBlank()) {
+                    throw new IllegalArgumentException("URL is required for LINK material.");
+                }
                 tryDeleteOldFile(material.getUrl());
                 material.setUrl(url);
+            } else if (file != null && !file.isEmpty()) {
+                tryDeleteOldFile(material.getUrl());
+                String storedLocation = fileStorageService.storeFile(file, resolveSubFolder(materialType));
+                material.setUrl(storedLocation);
             }
-        } else if (file != null && !file.isEmpty()) {
-            // Delete old file
-            tryDeleteOldFile(material.getUrl());
 
-            // Determine sub-folder based on new type
-            String subFolder;
-            switch (type.toUpperCase()) {
-                case "VIDEO": subFolder = "materials/video"; break;
-                case "NOTE":  subFolder = "materials/note";  break;
-                default:      subFolder = "materials/pdf";   break;
-            }
-            String storedLocation = fileStorageService.storeFile(file, subFolder);
-            material.setUrl(storedLocation);
+            LearningMaterial saved = materialRepository.save(material);
+            return ResponseEntity.ok(saved);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            log.error("Material update failed due to storage configuration: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("message", e.getMessage()));
+        } catch (IOException e) {
+            log.error("Material update I/O failed for material {}: {}", id, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", e.getMessage()));
         }
-
-        LearningMaterial saved = materialRepository.save(material);
-        return ResponseEntity.ok(saved);
     }
 
     /**
@@ -184,7 +190,7 @@ public class MaterialController {
     @DeleteMapping("/materials/{id}")
     public ResponseEntity<Void> deleteMaterial(@PathVariable Long id) {
         LearningMaterial material = materialRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Material not found with id: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Material not found with id: " + id));
 
         tryDeleteOldFile(material.getUrl());
 
@@ -206,6 +212,26 @@ public class MaterialController {
         } catch (IOException e) {
             log.warn("Failed to delete material file: {}", e.getMessage());
         }
+    }
+
+    private LearningMaterial.MaterialType parseMaterialType(String type) {
+        if (type == null || type.isBlank()) {
+            throw new IllegalArgumentException("Material type is required.");
+        }
+        try {
+            return LearningMaterial.MaterialType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid material type: " + type + ". Allowed values: PDF, VIDEO, NOTE, LINK.");
+        }
+    }
+
+    private String resolveSubFolder(LearningMaterial.MaterialType materialType) {
+        return switch (materialType) {
+            case VIDEO -> "materials/video";
+            case NOTE -> "materials/note";
+            case PDF -> "materials/pdf";
+            default -> throw new IllegalArgumentException("LINK type does not use file storage.");
+        };
     }
 
     private String getExtension(String path) {
